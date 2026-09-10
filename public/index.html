@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>日志中心 · log.tykrem.top</title>
+  <link rel="stylesheet" href="/css/style.css?v=20260904b">
+</head>
+<body>
+  <div id="login-view" class="login-view">
+    <form id="login-form" class="login-card" autocomplete="off">
+      <div class="login-logo">&#128220;</div>
+      <h1>日志中心</h1>
+      <p>请输入访问码查看日志</p>
+      <input id="login-code" type="password" placeholder="访问码" maxlength="128" required>
+      <p id="login-error" class="login-error hidden"></p>
+      <button type="submit">进入</button>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div class="brand">&#128220; 日志中心</div>
+      <div class="topbar-actions">
+        <span class="updated" id="updated"></span>
+        <a href="https://tykrem.top/">服务器监控</a>
+        <button id="logout-btn" type="button">退出</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="filter-bar">
+        <label>来源
+          <select id="source"><option value="">全部</option></select>
+        </label>
+        <label>级别
+          <select id="level">
+            <option value="">全部</option>
+            <option>debug</option>
+            <option>info</option>
+            <option>warn</option>
+            <option>error</option>
+          </select>
+        </label>
+        <label class="wide">搜索
+          <input id="q" type="search" placeholder="消息内容 / 元数据关键字">
+        </label>
+        <label>开始
+          <input id="from" type="date">
+        </label>
+        <label>结束
+          <input id="to" type="date">
+        </label>
+        <div class="filter-actions">
+          <button id="query-btn" type="button">查询</button>
+          <button id="reset-btn" type="button" class="ghost">重置</button>
+          <label class="live"><input id="live" type="checkbox" checked> 自动刷新</label>
+        </div>
+      </section>
+
+      <div class="result-head">
+        <span id="summary">共 0 条日志</span>
+        <button id="prev" type="button" class="ghost">上一页</button>
+        <span id="page-no">第 1 / 1 页</span>
+        <button id="next" type="button" class="ghost">下一页</button>
+      </div>
+
+      <section id="log-list" class="log-list">
+        <div class="empty">暂无日志</div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <div class="mobile-block">
+    <div class="mobile-card">
+      <p class="mobile-emoji">📱</p>
+      <h2>不支持移动端</h2>
+      <p>当前页面暂不支持移动端，请使用电脑浏览器访问。</p>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>

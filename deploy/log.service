@@ -1,0 +1,17 @@
+[Unit]
+Description=Log Center for log.tykrem.top
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/log-app.env
+ExecStart=/opt/node/bin/node /opt/log-app/server/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
