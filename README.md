@@ -4,7 +4,7 @@
 
 ## 当前来源
 
-- `qq-bot`：QQ → Codex 中转日志
+- `feishu-bot`：飞书 → Codex 中转日志（原 `qq-bot` 已下线）
 - `log-center`：日志中心自身的清理记录
 - 后续接入：任意服务按下面 API 上报即可自动出现在来源列表中
 
@@ -15,10 +15,10 @@ curl -X POST http://127.0.0.1:8792/api/v1/logs \
   -H "Content-Type: application/json" \
   -H "X-Log-Token: <LOG_INGEST_TOKEN>" \
   -d '{
-    "source": "qq-bot",
+    "source": "feishu-bot",
     "level": "info",
     "message": "收到消息",
-    "meta": {"qq": 12345}
+    "meta": {"openId": "ou_xxxx"}
   }'
 ```
 
