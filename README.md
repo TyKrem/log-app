@@ -48,3 +48,7 @@ cp -a /root/log-app/public/. /opt/log-app/public/
 cp /root/log-app/server/server.js /opt/log-app/server/server.js
 systemctl restart log-center
 ```
+
+## License
+
+MIT
