@@ -6,6 +6,9 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
+const UTIL = require('./lib/util.js');
+const SESSION = require('./lib/session.js');
+const ENTRY = require('./lib/entry.js');
 
 const PORT = parseInt(process.env.LOG_PORT || '8792', 10);
 const HOST = process.env.LOG_HOST || '127.0.0.1';
@@ -17,8 +20,6 @@ const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHas
 const COOKIE_NAME = 'log_session';
 const COOKIE_MAX_AGE = 60 * 60 * 12;
 const MAX_BODY = 2 * 1024 * 1024;
-const SOURCE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
-const LEVELS = ['debug', 'info', 'warn', 'error'];
 
 if (!ADMIN_CODE) {
   console.error('LOG_ADMIN_CODE is not set');
@@ -27,21 +28,11 @@ if (!ADMIN_CODE) {
 
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
 
-function sha256hex(value) {
-  return crypto.createHash('sha256').update(String(value)).digest('hex');
-}
-
-function safeEqual(a, b) {
-  const ha = crypto.createHash('sha256').update(String(a)).digest();
-  const hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
-
-function dayName(ts) {
-  const d = new Date(ts || Date.now());
-  const p = (n) => (n < 10 ? '0' + n : '' + n);
-  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-}
+// 纯函数都在 server/lib 下（可单测），这里起别名保持调用点不变
+const sha256hex = UTIL.sha256hex;
+const safeEqual = UTIL.safeEqual;
+const dayName = UTIL.dayName;
+const fileDayTs = UTIL.fileDayTs;
 
 function fileForTs(ts) {
   return path.join(DATA_DIR, dayName(ts) + '.jsonl');
@@ -50,21 +41,9 @@ function fileForTs(ts) {
 function appendEntries(list) {
   if (!Array.isArray(list)) list = [list];
   list.forEach(function (entry) {
-    if (!entry || typeof entry.message !== 'string' || !entry.message) return;
-    const source = String(entry.source || 'unknown').toLowerCase().trim();
-    if (!SOURCE_RE.test(source)) return;
-    const level = LEVELS.indexOf(String(entry.level || 'info').toLowerCase()) >= 0
-      ? String(entry.level).toLowerCase() : 'info';
-    const ts = Number.isFinite(Number(entry.ts)) ? Number(entry.ts) : Date.now();
-    const row = {
-      id: crypto.randomBytes(8).toString('hex'),
-      ts: ts,
-      source: source,
-      level: level,
-      message: String(entry.message),
-      meta: entry.meta && typeof entry.meta === 'object' ? entry.meta : undefined,
-    };
-    fs.appendFileSync(fileForTs(ts), JSON.stringify(row) + '\n');
+    const row = ENTRY.normalizeEntry(entry, crypto.randomBytes(8).toString('hex'), Date.now());
+    if (!row) return;
+    fs.appendFileSync(fileForTs(row.ts), JSON.stringify(row) + '\n');
   });
 }
 
@@ -74,10 +53,6 @@ function dayFiles() {
   return names
     .filter(function (n) { return /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n); })
     .sort();
-}
-
-function fileDayTs(name) {
-  return Date.parse(name.slice(0, 10) + 'T00:00:00Z');
 }
 
 function listSources() {
@@ -104,16 +79,9 @@ function listSources() {
 }
 
 function queryLogs(opts) {
-  const cutoff = Date.now() - RETENTION_DAYS * 86400000;
-  const fromRaw = opts.from !== '' && opts.from != null ? Number(opts.from) : NaN;
-  const toRaw = opts.to !== '' && opts.to != null ? Number(opts.to) : NaN;
-  const from = Math.max(cutoff, Number.isFinite(fromRaw) ? fromRaw : cutoff);
-  const to = Math.max(from, Number.isFinite(toRaw) ? toRaw : Date.now());
-  const source = opts.source ? String(opts.source).toLowerCase().trim() : '';
-  const level = opts.level ? String(opts.level).toLowerCase().trim() : '';
-  const q = opts.q ? String(opts.q).toLowerCase().trim() : '';
-  const page = Math.max(1, parseInt(opts.page, 10) || 1);
-  const size = Math.min(500, Math.max(1, parseInt(opts.size, 10) || 100));
+  const filter = ENTRY.normalizeFilter(opts, Date.now(), RETENTION_DAYS);
+  const from = filter.from;
+  const to = filter.to;
   const fromDay = dayName(from);
   const toDay = dayName(to);
   const matched = [];
@@ -128,26 +96,12 @@ function queryLogs(opts) {
       if (!line.trim()) continue;
       let row;
       try { row = JSON.parse(line); } catch (e) { continue; }
-      if (!row || row.ts < from || row.ts > to) continue;
-      if (source && (row.source || '') !== source) continue;
-      if (level && (row.level || '') !== level) continue;
-      if (q) {
-        const hay = ((row.message || '') + '\n' + JSON.stringify(row.meta || {})).toLowerCase();
-        if (hay.indexOf(q) < 0) continue;
-      }
+      if (!ENTRY.matchesFilter(row, filter)) continue;
       matched.push(row);
     }
   });
 
-  const total = matched.length;
-  const start = (page - 1) * size;
-  return {
-    logs: matched.slice(start, start + size),
-    total: total,
-    page: page,
-    size: size,
-    pages: Math.ceil(total / size) || 1,
-  };
+  return ENTRY.paginate(matched, opts.page, opts.size);
 }
 
 function cleanupExpired() {
@@ -202,38 +156,18 @@ function readBody(req) {
   });
 }
 
+// 令牌与 Cookie 解析在 lib/session.js，这里把运行期配置传进去
 function parseCookies(req) {
-  const out = {};
-  (req.headers.cookie || '').split(';').forEach(function (part) {
-    const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
-  });
-  return out;
+  return SESSION.parseCookies(req.headers.cookie || '');
 }
 
 function makeToken(role) {
-  const ts = Date.now();
-  const claims = Buffer.from(JSON.stringify({ role: role })).toString('base64url');
-  const sig = crypto.createHmac('sha256', SESSION_SECRET)
-    .update(ts + '.' + claims)
-    .digest('base64url');
-  return ts + '.' + claims + '.' + sig;
+  return SESSION.makeToken(role, SESSION_SECRET);
 }
 
 function verifyToken(token) {
-  if (!token) return null;
-  const parts = String(token).split('.');
-  if (parts.length !== 3) return null;
-  const ts = parseInt(parts[0], 10);
-  if (!isFinite(ts) || Date.now() - ts > COOKIE_MAX_AGE * 1000) return null;
-  const expect = crypto.createHmac('sha256', SESSION_SECRET)
-    .update(parts[0] + '.' + parts[1])
-    .digest('base64url');
-  if (!safeEqual(expect, parts[2])) return null;
-  try {
-    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return claims.role === 'admin' ? { role: 'admin' } : null;
-  } catch (e) { return null; }
+  // 配置里 COOKIE_MAX_AGE 是秒，库里按毫秒收
+  return SESSION.verifyToken(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
 }
 
 function isAdmin(req) {

@@ -99,3 +99,12 @@ curl -b cookie.txt "http://127.0.0.1:8792/api/v1/sources"
 ## License
 
 [MIT](LICENSE)
+## 测试
+
+```bash
+node --test test/        # 需要 Node 16.17+（node:test 是内置的，没加依赖）
+```
+
+覆盖 `server/lib/` 下的纯函数：令牌签发与校验（含各种篡改路径）、Cookie 解析、
+日志条目校验与查询过滤、分页边界。这个项目本身零依赖、没有 package.json，
+所以测试也走原生命令，不引入 npm。
