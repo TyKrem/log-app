@@ -1,0 +1,9 @@
+# 密钥不进仓库（真实值放 /etc/*.env）
+*.env
+!*.env.example
+*.env.bak.*
+
+node_modules/
+data/
+npm-debug.log*
+*.tmp
