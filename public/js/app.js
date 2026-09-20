@@ -237,7 +237,7 @@
     try {
       var st = await apiPrivate("/api/private/state");
       if (!st.configured) {
-        privateError("服务端没有配置私密区域访问码（/etc/codex-chat.env 的 CHAT_SUPER_CODE）");
+        privateError("服务端没有配置私密区域访问码（/etc/super-code.env 的 SUPER_CODE）");
         $("private-lock").classList.add("hidden");
         $("private-body").classList.add("hidden");
         return;

@@ -17,10 +17,10 @@ const RETENTION_DAYS = Math.max(1, parseInt(process.env.LOG_RETENTION_DAYS || '3
 const ADMIN_CODE = String(process.env.LOG_ADMIN_CODE || '').trim();
 const INGEST_TOKEN = String(process.env.LOG_INGEST_TOKEN || '').trim();
 // 私密区域的访问码 = 这台服务器的「超级码」。
-// 默认从 /etc/codex-chat.env 读 CHAT_SUPER_CODE（与监控页解锁循环任务用的是同一个），
+// 默认从 /etc/super-code.env 读 SUPER_CODE（与监控页解锁循环任务用的是同一个），
 // 也可以用 LOG_PRIVATE_CODE 单独指定。
 const PRIVATE_CODE = String(process.env.LOG_PRIVATE_CODE ||
-  superCodeFromEnv('/etc/codex-chat.env') || '').trim();
+  superCodeFromEnv('/etc/super-code.env') || '').trim();
 const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + ADMIN_CODE).digest('hex')).trim();
 const COOKIE_NAME = 'log_session';
 const PRIVATE_COOKIE = 'log_private';
@@ -45,7 +45,7 @@ function envValue(file, key) {
 }
 
 function superCodeFromEnv(file) {
-  return envValue(file, 'CHAT_SUPER_CODE');
+  return envValue(file, 'SUPER_CODE');
 }
 
 if (!ADMIN_CODE) {

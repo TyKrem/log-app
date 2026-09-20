@@ -79,7 +79,7 @@ curl -X POST http://127.0.0.1:8792/api/v1/logs \
 页面右上角的「🔒 私密区域」用**超级码**解锁（和后台访问码是两套凭证，
 超级码解锁后也进不了普通后台，反过来也一样）：
 
-- 访问码：`LOG_PRIVATE_CODE`；不设置时回退读 `/etc/codex-chat.env` 的 `CHAT_SUPER_CODE`
+- 访问码：`LOG_PRIVATE_CODE`；不设置时回退读 `/etc/super-code.env` 的 `SUPER_CODE`
   （本机的约定是「私密区域」与「监控页解锁循环任务」共用同一个超级码）
 - 里面的条目在存储上带 `private: true`：普通视图（`/api/v1/logs`）与来源列表
   （`/api/v1/sources`）都看不到它们，只有私密区域（`/api/private/logs`）能查到
@@ -110,7 +110,7 @@ curl -b cookie.txt "http://127.0.0.1:8792/api/v1/sources"
 | `LOG_ADMIN_CODE` | — | 后台登录码，必填 |
 | `LOG_INGEST_TOKEN` | — | 写入令牌，必填 |
 | `LOG_SESSION_SECRET` | 随机 | 登录 Cookie 签名密钥 |
-| `LOG_PRIVATE_CODE` | 见下 | 私密区域访问码；不设置时回退读 `/etc/codex-chat.env` 的 `CHAT_SUPER_CODE` |
+| `LOG_PRIVATE_CODE` | 见下 | 私密区域访问码；不设置时回退读 `/etc/super-code.env` 的 `SUPER_CODE` |
 | `LOG_DATA_DIR` | `/opt/log-app/data` | 日志存储目录 |
 | `LOG_RETENTION_DAYS` | `30` | 保留天数 |
 
