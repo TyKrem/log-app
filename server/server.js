@@ -257,6 +257,30 @@ const server = http.createServer(function (req, res) {
 cleanupExpired();
 setInterval(cleanupExpired, 60 * 60 * 1000);
 
+// 自己也往自己报一条「启动」：重启时间点在日志里能直接看到（走的是对外写入接口）。
+function reportSelf(message, meta) {
+  if (!INGEST_TOKEN) return;
+  try {
+    const body = JSON.stringify({ source: 'log-center', level: 'info', message: message, meta: meta || {} });
+    const req = http.request({
+      host: HOST,
+      port: PORT,
+      path: '/api/v1/logs',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'X-Log-Token': INGEST_TOKEN,
+      },
+      timeout: 3000,
+    }, function (res) { res.resume(); });
+    req.on('error', function () {});
+    req.on('timeout', function () { req.destroy(); });
+    req.end(body);
+  } catch (e) {}
+}
+
 server.listen(PORT, HOST, function () {
   console.log('log-center listening on http://' + HOST + ':' + PORT + ' retention=' + RETENTION_DAYS + 'd');
+  reportSelf('日志中心启动', { port: PORT, retentionDays: RETENTION_DAYS, dataDir: DATA_DIR });
 });
