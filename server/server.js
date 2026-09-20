@@ -16,10 +16,37 @@ const DATA_DIR = process.env.LOG_DATA_DIR || path.join(__dirname, '..', 'data');
 const RETENTION_DAYS = Math.max(1, parseInt(process.env.LOG_RETENTION_DAYS || '30', 10) || 30);
 const ADMIN_CODE = String(process.env.LOG_ADMIN_CODE || '').trim();
 const INGEST_TOKEN = String(process.env.LOG_INGEST_TOKEN || '').trim();
+// 私密区域的访问码 = 这台服务器的「超级码」。
+// 默认从 /etc/codex-chat.env 读 CHAT_SUPER_CODE（与监控页解锁循环任务用的是同一个），
+// 也可以用 LOG_PRIVATE_CODE 单独指定。
+const PRIVATE_CODE = String(process.env.LOG_PRIVATE_CODE ||
+  superCodeFromEnv('/etc/codex-chat.env') || '').trim();
 const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + ADMIN_CODE).digest('hex')).trim();
 const COOKIE_NAME = 'log_session';
+const PRIVATE_COOKIE = 'log_private';
 const COOKIE_MAX_AGE = 60 * 60 * 12;
 const MAX_BODY = 2 * 1024 * 1024;
+
+/**
+ * 从 .env 文件里取某个键的值（只用于读本机超级码，不落任何日志）。
+ * @param {string} file
+ * @param {string} key
+ * @returns {string}
+ */
+function envValue(file, key) {
+  try {
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const m = /^([A-Za-z0-9_]+)=(.*)$/.exec(lines[i].trim());
+      if (m && m[1] === key) return m[2].trim();
+    }
+  } catch (e) {}
+  return '';
+}
+
+function superCodeFromEnv(file) {
+  return envValue(file, 'CHAT_SUPER_CODE');
+}
 
 if (!ADMIN_CODE) {
   console.error('LOG_ADMIN_CODE is not set');
@@ -66,6 +93,8 @@ function listSources() {
       if (!line.trim()) return;
       try {
         const row = JSON.parse(line);
+        // 私密条目不进普通视图的来源列表，免得来源名就把私密的存在暴露了
+        if (ENTRY.isPrivate(row)) return;
         const s = row.source || 'unknown';
         if (!map[s]) map[s] = { source: s, count: 0, last: 0 };
         map[s].count++;
@@ -170,8 +199,18 @@ function verifyToken(token) {
   return SESSION.verifyToken(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
 }
 
+function tokenRole(token) {
+  return SESSION.tokenRole(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
+}
+
 function isAdmin(req) {
-  return !!verifyToken(parseCookies(req)[COOKIE_NAME]);
+  // 只看 admin 角色：私密令牌（log_private）不该能进普通后台
+  return tokenRole(parseCookies(req)[COOKIE_NAME]) === 'admin';
+}
+
+// 私密区域：单独一个 Cookie，和普通登录互不影响（管理员也能没有私密权限）
+function isPrivateUnlocked(req) {
+  return tokenRole(parseCookies(req)[PRIVATE_COOKIE]) === 'private';
 }
 
 function isIngestAllowed(req) {
@@ -203,10 +242,86 @@ function route(req, res) {
   if (req.method === 'POST' && p === '/api/logout') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Set-Cookie': COOKIE_NAME + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+      // 退出登录时把私密区域的解锁也一起清掉
+      'Set-Cookie': [
+        COOKIE_NAME + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+        PRIVATE_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+      ],
     });
     res.end(JSON.stringify({ ok: true }));
     return;
+  }
+
+  // ---- 私密区域：用服务器超级码解锁，和普通登录是两套 ----
+  if (req.method === 'POST' && p === '/api/private/unlock') {
+    readBody(req).then(function (body) {
+      if (!PRIVATE_CODE) return sendJson(res, 503, { error: '服务端没有配置私密区域访问码' });
+      if (!safeEqual(String(body.code || ''), PRIVATE_CODE)) {
+        return sendJson(res, 401, { error: '超级码错误' });
+      }
+      const token = makeToken('private');
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Set-Cookie': PRIVATE_COOKIE + '=' + encodeURIComponent(token) +
+          '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
+      });
+      res.end(JSON.stringify({ ok: true }));
+    }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
+    return;
+  }
+
+  if (req.method === 'POST' && p === '/api/private/lock') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Set-Cookie': PRIVATE_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+    });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  // 私密区域的状态 / 查询 / 写入：只认超级码解锁出来的 Cookie，
+  // 必须在管理员守卫之前处理——它与普通登录是两套凭证，管理员也未必解锁过
+  if (req.method === 'GET' && p === '/api/private/state') {
+    return sendJson(res, 200, { configured: !!PRIVATE_CODE, unlocked: isPrivateUnlocked(req) });
+  }
+
+  if (p.indexOf('/api/private/') === 0) {
+    if (!isPrivateUnlocked(req)) {
+      return sendJson(res, 401, { error: '私密区域未解锁' });
+    }
+
+    if (req.method === 'GET' && p === '/api/private/logs') {
+      const params = url.searchParams;
+      return sendJson(res, 200, queryLogs({
+        source: params.get('source') || '',
+        level: params.get('level') || '',
+        q: params.get('q') || '',
+        from: params.get('from') || '',
+        to: params.get('to') || '',
+        page: params.get('page') || '1',
+        size: params.get('size') || '100',
+        privacy: 'only',
+      }));
+    }
+
+    if (req.method === 'POST' && p === '/api/private/note') {
+      readBody(req).then(function (body) {
+        const message = String(body.message || '').trim();
+        if (!message) return sendJson(res, 400, { error: '内容不能为空' });
+        appendEntries({
+          source: String(body.source || 'private'),
+          level: String(body.level || 'info'),
+          message: message,
+          meta: body.meta && typeof body.meta === 'object' ? body.meta : undefined,
+          private: true,
+        });
+        sendJson(res, 201, { ok: true });
+      }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
+      return;
+    }
+
+    return sendJson(res, 404, { error: '未找到接口' });
   }
 
   if (req.method === 'POST' && p === '/api/v1/logs') {
@@ -240,8 +355,10 @@ function route(req, res) {
       to: params.get('to') || '',
       page: params.get('page') || '1',
       size: params.get('size') || '100',
+      privacy: 'exclude',        // 普通视图永远不含私密条目
     }));
   }
+
 
   sendJson(res, 404, { error: '未找到接口' });
 }

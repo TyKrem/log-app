@@ -105,3 +105,45 @@ test('paginate 分页与上限', function () {
   // 空列表 pages 也是 1，避免前端算出 0
   assert.strictEqual(ENTRY.paginate([], 1, 10).pages, 1);
 });
+
+// 私密条目：只有显式 private: true 才算，普通视图看不到，私密区域只看得到
+
+test('normalizeEntry 保留 private 标记', function () {
+  const priv = ENTRY.normalizeEntry({ message: '私密内容', private: true }, 'i1', 1000);
+  assert.strictEqual(priv.private, true);
+  // 非 true 的一律不当私密（'true' 字符串、1、false 都不算）
+  assert.strictEqual(ENTRY.normalizeEntry({ message: 'x', private: 'true' }, 'i2', 1000).private, undefined);
+  assert.strictEqual(ENTRY.normalizeEntry({ message: 'x', private: 1 }, 'i3', 1000).private, undefined);
+  assert.strictEqual(ENTRY.normalizeEntry({ message: 'x', private: false }, 'i4', 1000).private, undefined);
+  assert.strictEqual(ENTRY.normalizeEntry({ message: 'x' }, 'i5', 1000).private, undefined);
+});
+
+test('isPrivate 只认 true', function () {
+  assert.strictEqual(ENTRY.isPrivate({ private: true }), true);
+  assert.strictEqual(ENTRY.isPrivate({ private: 'true' }), false);
+  assert.strictEqual(ENTRY.isPrivate({}), false);
+  assert.strictEqual(ENTRY.isPrivate(null), false);
+});
+
+test('matchesFilter 按 privacy 维度过滤', function () {
+  const filter = ENTRY.normalizeFilter({ privacy: 'exclude' }, 10000, 30);
+  const priv = { ts: 9999, source: 'private', level: 'info', message: '私密', private: true };
+  const normal = { ts: 9999, source: 'feishu-bot', level: 'info', message: '普通' };
+  // 普通视图：排除私密
+  assert.strictEqual(ENTRY.matchesFilter(priv, filter), false);
+  assert.strictEqual(ENTRY.matchesFilter(normal, filter), true);
+  // 私密区域：只看私密
+  const onlyFilter = ENTRY.normalizeFilter({ privacy: 'only' }, 10000, 30);
+  assert.strictEqual(ENTRY.matchesFilter(priv, onlyFilter), true);
+  assert.strictEqual(ENTRY.matchesFilter(normal, onlyFilter), false);
+  // all：都放行（给调试/导出留口子）
+  const allFilter = ENTRY.normalizeFilter({ privacy: 'all' }, 10000, 30);
+  assert.strictEqual(ENTRY.matchesFilter(priv, allFilter), true);
+  assert.strictEqual(ENTRY.matchesFilter(normal, allFilter), true);
+});
+
+test('normalizeFilter 的 privacy 默认排除私密、非法值回落 exclude', function () {
+  assert.strictEqual(ENTRY.normalizeFilter({}, Date.now(), 30).privacy, 'exclude');
+  assert.strictEqual(ENTRY.normalizeFilter({ privacy: 'only' }, Date.now(), 30).privacy, 'only');
+  assert.strictEqual(ENTRY.normalizeFilter({ privacy: '乱写' }, Date.now(), 30).privacy, 'exclude');
+});

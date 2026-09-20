@@ -24,6 +24,52 @@ body {
 button { font: inherit; color: inherit; }
 .hidden { display: none !important; }
 
+/* 私密区域：独立浮层，和普通日志视图互不影响 */
+.login-alt { margin: 12px 0 0; text-align: center; }
+.linklike {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: 13px;
+}
+.linklike:hover { text-decoration: underline; }
+.private-view {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, .45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 5vh 16px;
+  overflow: auto;
+}
+.private-card {
+  width: 100%; max-width: 880px;
+  background: var(--panel, #fff); border: 1px solid var(--line);
+  border-radius: 14px; padding: 18px 20px 22px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .28);
+}
+.private-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 16px; margin-bottom: 14px;
+}
+.private-lock { display: flex; flex-direction: column; gap: 10px; }
+.private-lock p { margin: 0; color: var(--muted); font-size: 13px; }
+.private-lock input {
+  height: 40px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--elev); color: var(--text); padding: 0 12px; outline: none;
+}
+.private-lock input:focus { border-color: var(--accent); }
+.private-lock button, .private-note-actions button {
+  height: 36px; padding: 0 16px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+}
+.private-note { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.private-note textarea {
+  width: 100%; resize: vertical; border-radius: 10px; padding: 10px 12px;
+  border: 1px solid var(--line); background: var(--elev); color: var(--text);
+  font-family: inherit; font-size: 13px; outline: none;
+}
+.private-note textarea:focus { border-color: var(--accent); }
+.private-note-actions { display: flex; align-items: center; gap: 8px; }
+.private-note-actions .updated { flex: 1; }
+.private-note-actions .ghost { background: var(--elev); color: var(--text); border-color: var(--line); }
+
 /* login */
 .login-view {
   min-height: 100vh;

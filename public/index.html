@@ -15,6 +15,7 @@
       <input id="login-code" type="password" placeholder="访问码" maxlength="128" required>
       <p id="login-error" class="login-error hidden"></p>
       <button type="submit">进入</button>
+      <p class="login-alt"><button id="private-btn-login" type="button" class="linklike">&#128274; 私密区域</button></p>
     </form>
   </div>
 
@@ -24,6 +25,7 @@
       <div class="topbar-actions">
         <span class="updated" id="updated"></span>
         <a href="https://tykrem.top/">服务器监控</a>
+        <button id="private-btn" type="button">&#128274; 私密区域</button>
         <button id="logout-btn" type="button">退出</button>
       </div>
     </header>
@@ -69,6 +71,35 @@
         <div class="empty">暂无日志</div>
       </section>
     </main>
+  </div>
+
+  <div id="private-view" class="private-view hidden">
+    <div class="private-card">
+      <div class="private-head">
+        <span>&#128274; 私密区域</span>
+        <button id="private-close" type="button" class="ghost">关闭</button>
+      </div>
+
+      <form id="private-lock" class="private-lock">
+        <p>只有超级码能进。这里的内容不会出现在普通日志视图与来源列表里。</p>
+        <input id="private-code" type="password" placeholder="超级码" autocomplete="off" required>
+        <button type="submit">解锁</button>
+        <p id="private-error" class="login-error hidden"></p>
+      </form>
+
+      <div id="private-body" class="hidden">
+        <form id="private-note-form" class="private-note">
+          <textarea id="private-note" rows="3" placeholder="记一条私密记录（支持多行），保存后只在这里可见"></textarea>
+          <div class="private-note-actions">
+            <span id="private-status" class="updated"></span>
+            <button type="submit">保存</button>
+            <button id="private-refresh" type="button" class="ghost">刷新</button>
+            <button id="private-lock-btn" type="button" class="ghost">锁定</button>
+          </div>
+        </form>
+        <div id="private-list" class="log-list"></div>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

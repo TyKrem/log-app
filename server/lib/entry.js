@@ -4,6 +4,8 @@
 
 const SOURCE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 const LEVELS = ['debug', 'info', 'warn', 'error'];
+// 隐私维度：only = 只看私密（私密区域），exclude = 只不看私密（普通视图）
+const PRIVACY = ['only', 'exclude', 'all'];
 
 /**
  * 把客户端提交的一条日志整理成入库的行。
@@ -12,7 +14,7 @@ const LEVELS = ['debug', 'info', 'warn', 'error'];
  * @param {any} entry
  * @param {string} id 调用方生成的 id（保持这个函数纯净）
  * @param {number} now 毫秒时间戳，entry.ts 缺失时用它
- * @returns {{ id: string, ts: number, source: string, level: string, message: string, meta?: any }|null}
+ * @returns {{ id: string, ts: number, source: string, level: string, message: string, meta?: any, private?: boolean }|null}
  */
 function normalizeEntry(entry, id, now) {
   if (!entry || typeof entry.message !== 'string' || !entry.message) return null;
@@ -27,7 +29,7 @@ function normalizeEntry(entry, id, now) {
   const levelRaw = String(entry.level || 'info').toLowerCase();
   const level = LEVELS.indexOf(levelRaw) >= 0 ? levelRaw : 'info';
   const ts = Number.isFinite(Number(entry.ts)) ? Number(entry.ts) : now;
-  return {
+  const row = {
     id: id,
     ts: ts,
     source: source,
@@ -35,6 +37,19 @@ function normalizeEntry(entry, id, now) {
     message: String(entry.message),
     meta: entry.meta && typeof entry.meta === 'object' ? entry.meta : undefined,
   };
+  // 只有显式 private: true 才算私密；写进库里而不是靠来源命名区分，
+  // 这样同一个服务也能混合写普通日志与私密日志
+  if (entry.private === true) row.private = true;
+  return row;
+}
+
+/**
+ * 条目是不是私密条目。
+ * @param {any} row
+ * @returns {boolean}
+ */
+function isPrivate(row) {
+  return !!(row && row.private === true);
 }
 
 /**
@@ -45,6 +60,8 @@ function normalizeEntry(entry, id, now) {
  */
 function matchesFilter(row, filter) {
   if (!row) return false;
+  if (filter.privacy === 'only' && !isPrivate(row)) return false;
+  if (filter.privacy === 'exclude' && isPrivate(row)) return false;
   if (row.ts < filter.from || row.ts > filter.to) return false;
   if (filter.source && (row.source || '') !== filter.source) return false;
   if (filter.level && (row.level || '') !== filter.level) return false;
@@ -76,6 +93,7 @@ function normalizeFilter(opts, now, retentionDays) {
     source: o.source ? String(o.source).toLowerCase().trim() : '',
     level: o.level ? String(o.level).toLowerCase().trim() : '',
     q: o.q ? String(o.q).toLowerCase().trim() : '',
+    privacy: PRIVACY.indexOf(String(o.privacy || 'exclude')) >= 0 ? String(o.privacy || 'exclude') : 'exclude',
   };
 }
 
@@ -104,6 +122,7 @@ module.exports = {
   SOURCE_RE: SOURCE_RE,
   LEVELS: LEVELS,
   normalizeEntry: normalizeEntry,
+  isPrivate: isPrivate,
   matchesFilter: matchesFilter,
   normalizeFilter: normalizeFilter,
   paginate: paginate,

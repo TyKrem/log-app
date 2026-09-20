@@ -3,8 +3,14 @@
 const crypto = require('crypto');
 const { safeEqual } = require('./util.js');
 
-// 管理端会话令牌：ts.claims.sig，签名是 HMAC-SHA256。
+// 会话令牌：ts.claims.sig，签名是 HMAC-SHA256。
 // secret 与当前时间都从外面传，这样能脱开环境变量单测。
+//
+// 两种角色：
+//   admin   —— 普通后台（访问码登录），能查普通日志
+//   private —— 私密区域（超级码解锁），只能查/写私密条目
+// 角色必须显式在白名单里，伪造的其它角色一律判无效。
+const ROLES = ['admin', 'private'];
 
 /**
  * @param {string} role
@@ -41,10 +47,23 @@ function verifyToken(token, secret, maxAgeMs, now) {
   if (!safeEqual(expect, parts[2])) return null;
   try {
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return claims.role === 'admin' ? { role: 'admin' } : null;
+    return ROLES.indexOf(claims.role) >= 0 ? { role: claims.role } : null;
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * 取令牌里的角色，校验不过返回空串。调用方自己判断是不是它要的角色。
+ * @param {string} token
+ * @param {string} secret
+ * @param {number} maxAgeMs
+ * @param {number} [now]
+ * @returns {string}
+ */
+function tokenRole(token, secret, maxAgeMs, now) {
+  const claims = verifyToken(token, secret, maxAgeMs, now);
+  return claims ? claims.role : '';
 }
 
 // Cookie 头 → 对象。值会做一次 decodeURIComponent。
@@ -70,5 +89,6 @@ function parseCookies(headerValue) {
 module.exports = {
   makeToken: makeToken,
   verifyToken: verifyToken,
+  tokenRole: tokenRole,
   parseCookies: parseCookies,
 };

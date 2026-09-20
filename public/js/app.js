@@ -38,6 +38,15 @@
     return data;
   }
 
+  // 私密区域用单独一套凭证（超级码 → log_private Cookie），
+  // 所以不能走 api()：它遇到 401 会把人踢回登录页，这里弹错就好
+  async function apiPrivate(path, opts) {
+    var res = await fetch(path, opts);
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
+    return data;
+  }
+
   function showLogin() {
     app.classList.add("hidden");
     loginView.classList.remove("hidden");
@@ -205,6 +214,124 @@
   });
 
   initDates();
+
+  /* ---------- 私密区域 ---------- */
+  var privateView = $("private-view");
+
+  function privateShow() {
+    privateView.classList.remove("hidden");
+    privateRefreshState();
+  }
+
+  function privateHide() {
+    privateView.classList.add("hidden");
+  }
+
+  function privateError(msg) {
+    var el = $("private-error");
+    el.textContent = msg || "";
+    el.classList.toggle("hidden", !msg);
+  }
+
+  async function privateRefreshState() {
+    try {
+      var st = await apiPrivate("/api/private/state");
+      if (!st.configured) {
+        privateError("服务端没有配置私密区域访问码（/etc/codex-chat.env 的 CHAT_SUPER_CODE）");
+        $("private-lock").classList.add("hidden");
+        $("private-body").classList.add("hidden");
+        return;
+      }
+      privateError("");
+      var unlocked = !!st.unlocked;
+      $("private-lock").classList.toggle("hidden", unlocked);
+      $("private-body").classList.toggle("hidden", !unlocked);
+      if (unlocked) loadPrivateLogs();
+    } catch (e) {
+      privateError(e.message);
+    }
+  }
+
+  async function loadPrivateLogs() {
+    try {
+      var data = await apiPrivate("/api/private/logs?size=100");
+      renderPrivateLogs(data);
+    } catch (e) {
+      privateError(e.message);
+    }
+  }
+
+  function renderPrivateLogs(data) {
+    var list = $("private-list");
+    list.innerHTML = "";
+    $("private-status").textContent = "共 " + data.total + " 条 · " +
+      new Date().toLocaleTimeString("zh-CN", { hour12: false }) + " 更新";
+    if (!data.logs.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "还没有私密记录，写一条试试";
+      list.appendChild(empty);
+      return;
+    }
+    data.logs.forEach(function (row) {
+      var el = document.createElement("div");
+      el.className = "log-row";
+      var metaHtml = row.meta ? '<div class="log-meta">meta<pre>' + esc(JSON.stringify(row.meta, null, 2)) + "</pre></div>" : "";
+      el.innerHTML =
+        '<span class="log-time">' + esc(fmtTime(row.ts)) + "</span>" +
+        '<span class="log-source">' + esc(row.source) + "</span>" +
+        '<span class="log-level ' + esc(row.level) + '">' + esc(row.level) + "</span>" +
+        '<div class="log-main"><div class="log-message">' + esc(row.message) + "</div>" + metaHtml + "</div>";
+      list.appendChild(el);
+    });
+  }
+
+  $("private-btn").addEventListener("click", privateShow);
+  $("private-btn-login").addEventListener("click", privateShow);
+  $("private-close").addEventListener("click", privateHide);
+  $("private-refresh").addEventListener("click", loadPrivateLogs);
+
+  $("private-lock").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    var code = $("private-code").value.trim();
+    if (!code) return;
+    try {
+      await apiPrivate("/api/private/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code }),
+      });
+      $("private-code").value = "";
+      privateError("");
+      privateRefreshState();
+    } catch (e) {
+      privateError(e.message);
+    }
+  });
+
+  $("private-lock-btn").addEventListener("click", async function () {
+    try { await apiPrivate("/api/private/lock", { method: "POST" }); } catch (e) {}
+    $("private-list").innerHTML = "";
+    privateRefreshState();
+  });
+
+  $("private-note-form").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    var text = $("private-note").value.trim();
+    if (!text) return;
+    try {
+      await apiPrivate("/api/private/note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      $("private-note").value = "";
+      loadPrivateLogs();
+    } catch (e) {
+      privateError(e.message);
+    }
+  });
+
   api("/api/me")
     .then(function () {
       showApp();
