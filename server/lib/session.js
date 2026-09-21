@@ -6,11 +6,9 @@ const { safeEqual } = require('./util.js');
 // 会话令牌：ts.claims.sig，签名是 HMAC-SHA256。
 // secret 与当前时间都从外面传，这样能脱开环境变量单测。
 //
-// 两种角色：
-//   admin   —— 普通后台（访问码登录），能查普通日志
-//   private —— 私密区域（超级码解锁），只能查/写私密条目
+// 只有一种角色：super —— 整站超级码解锁出来的会话，普通条目与私密条目都能看。
 // 角色必须显式在白名单里，伪造的其它角色一律判无效。
-const ROLES = ['admin', 'private'];
+const ROLES = ['super'];
 
 /**
  * @param {string} role

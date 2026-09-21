@@ -14,16 +14,15 @@ const PORT = parseInt(process.env.LOG_PORT || '8792', 10);
 const HOST = process.env.LOG_HOST || '127.0.0.1';
 const DATA_DIR = process.env.LOG_DATA_DIR || path.join(__dirname, '..', 'data');
 const RETENTION_DAYS = Math.max(1, parseInt(process.env.LOG_RETENTION_DAYS || '30', 10) || 30);
-const ADMIN_CODE = String(process.env.LOG_ADMIN_CODE || '').trim();
 const INGEST_TOKEN = String(process.env.LOG_INGEST_TOKEN || '').trim();
-// 私密区域的访问码 = 这台服务器的「超级码」。
-// 默认从 /etc/super-code.env 读 SUPER_CODE（与监控页解锁循环任务用的是同一个），
-// 也可以用 LOG_PRIVATE_CODE 单独指定。
-const PRIVATE_CODE = String(process.env.LOG_PRIVATE_CODE ||
+// 整站访问码 = 这台服务器的「超级码」：解锁后才能查任何日志（含私密条目）。
+// 默认从 /etc/super-code.env 读 SUPER_CODE（与监控页、文件服务共用同一个），
+// 也可以用 LOG_SUPER_CODE 单独指定。
+const SUPER_CODE = String(process.env.LOG_SUPER_CODE ||
+  process.env.LOG_PRIVATE_CODE ||
   superCodeFromEnv('/etc/super-code.env') || '').trim();
-const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + ADMIN_CODE).digest('hex')).trim();
+const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + SUPER_CODE).digest('hex')).trim();
 const COOKIE_NAME = 'log_session';
-const PRIVATE_COOKIE = 'log_private';
 const COOKIE_MAX_AGE = 60 * 60 * 12;
 const MAX_BODY = 2 * 1024 * 1024;
 
@@ -48,8 +47,8 @@ function superCodeFromEnv(file) {
   return envValue(file, 'SUPER_CODE');
 }
 
-if (!ADMIN_CODE) {
-  console.error('LOG_ADMIN_CODE is not set');
+if (!SUPER_CODE) {
+  console.error('未配置超级码：设置 LOG_SUPER_CODE，或把 SUPER_CODE 写进 /etc/super-code.env');
   process.exit(1);
 }
 
@@ -203,14 +202,9 @@ function tokenRole(token) {
   return SESSION.tokenRole(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
 }
 
-function isAdmin(req) {
-  // 只看 admin 角色：私密令牌（log_private）不该能进普通后台
-  return tokenRole(parseCookies(req)[COOKIE_NAME]) === 'admin';
-}
-
-// 私密区域：单独一个 Cookie，和普通登录互不影响（管理员也能没有私密权限）
-function isPrivateUnlocked(req) {
-  return tokenRole(parseCookies(req)[PRIVATE_COOKIE]) === 'private';
+// 整站唯一凭证：超级码换来的会话 Cookie
+function isUnlocked(req) {
+  return tokenRole(parseCookies(req)[COOKIE_NAME]) === 'super';
 }
 
 function isIngestAllowed(req) {
@@ -223,72 +217,41 @@ function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
 
-  if (req.method === 'POST' && p === '/api/login') {
+  // ---- 整站唯一的解锁入口：超级码换 12 小时会话 ----
+  if (req.method === 'POST' && p === '/api/unlock') {
     readBody(req).then(function (body) {
-      if (!safeEqual(String(body.code || ''), ADMIN_CODE)) {
-        return sendJson(res, 401, { error: '访问码错误' });
+      if (!SUPER_CODE) return sendJson(res, 503, { error: '服务端没有配置超级码' });
+      if (!safeEqual(String(body.code || ''), SUPER_CODE)) {
+        return sendJson(res, 401, { error: '超级码错误' });
       }
-      const token = makeToken('admin');
+      const token = makeToken('super');
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
         'Set-Cookie': COOKIE_NAME + '=' + encodeURIComponent(token) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
-      });
-      res.end(JSON.stringify({ ok: true, role: 'admin' }));
-    }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
-    return;
-  }
-
-  if (req.method === 'POST' && p === '/api/logout') {
-    res.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      // 退出登录时把私密区域的解锁也一起清掉
-      'Set-Cookie': [
-        COOKIE_NAME + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
-        PRIVATE_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
-      ],
-    });
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-
-  // ---- 私密区域：用服务器超级码解锁，和普通登录是两套 ----
-  if (req.method === 'POST' && p === '/api/private/unlock') {
-    readBody(req).then(function (body) {
-      if (!PRIVATE_CODE) return sendJson(res, 503, { error: '服务端没有配置私密区域访问码' });
-      if (!safeEqual(String(body.code || ''), PRIVATE_CODE)) {
-        return sendJson(res, 401, { error: '超级码错误' });
-      }
-      const token = makeToken('private');
-      res.writeHead(200, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'Set-Cookie': PRIVATE_COOKIE + '=' + encodeURIComponent(token) +
-          '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
       });
       res.end(JSON.stringify({ ok: true }));
     }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
     return;
   }
 
-  if (req.method === 'POST' && p === '/api/private/lock') {
+  if (req.method === 'POST' && p === '/api/lock') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Set-Cookie': PRIVATE_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+      'Set-Cookie': COOKIE_NAME + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
     });
     res.end(JSON.stringify({ ok: true }));
     return;
   }
 
-  // 私密区域的状态 / 查询 / 写入：只认超级码解锁出来的 Cookie，
-  // 必须在管理员守卫之前处理——它与普通登录是两套凭证，管理员也未必解锁过
-  if (req.method === 'GET' && p === '/api/private/state') {
-    return sendJson(res, 200, { configured: !!PRIVATE_CODE, unlocked: isPrivateUnlocked(req) });
+  if (req.method === 'GET' && p === '/api/session') {
+    return sendJson(res, 200, { configured: !!SUPER_CODE, unlocked: isUnlocked(req) });
   }
 
+  // ---- 私密条目：数据上仍然隔离（普通视图看不到），但不再需要二次解锁 ----
   if (p.indexOf('/api/private/') === 0) {
-    if (!isPrivateUnlocked(req)) {
-      return sendJson(res, 401, { error: '私密区域未解锁' });
+    if (!isUnlocked(req)) {
+      return sendJson(res, 401, { error: '需要超级码' });
     }
 
     if (req.method === 'GET' && p === '/api/private/logs') {
@@ -333,12 +296,13 @@ function route(req, res) {
     return;
   }
 
-  if (!isAdmin(req)) {
-    return sendJson(res, 401, { error: '未登录' });
+  // 除了上面的写入接口，其余一律要超级码解锁后的会话
+  if (!isUnlocked(req)) {
+    return sendJson(res, 401, { error: '需要超级码' });
   }
 
   if (req.method === 'GET' && p === '/api/me') {
-    return sendJson(res, 200, { role: 'admin' });
+    return sendJson(res, 200, { role: 'super' });
   }
 
   if (req.method === 'GET' && p === '/api/v1/sources') {

@@ -24,7 +24,7 @@ body {
 button { font: inherit; color: inherit; }
 .hidden { display: none !important; }
 
-/* 私密区域：独立浮层，和普通日志视图互不影响 */
+/* 私密条目：独立浮层，和普通日志视图互不影响 */
 .login-alt { margin: 12px 0 0; text-align: center; }
 .linklike {
   background: none; border: 0; padding: 0; cursor: pointer;
@@ -50,6 +50,7 @@ button { font: inherit; color: inherit; }
 }
 .private-lock { display: flex; flex-direction: column; gap: 10px; }
 .private-lock p { margin: 0; color: var(--muted); font-size: 13px; }
+.private-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 .private-lock input {
   height: 40px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--elev); color: var(--text); padding: 0 12px; outline: none;

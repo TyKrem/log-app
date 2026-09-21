@@ -4,18 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>日志中心 · log.tykrem.top</title>
-  <link rel="stylesheet" href="/css/style.css?v=20260904b">
+  <link rel="stylesheet" href="/css/style.css?v=20260921">
 </head>
 <body>
-  <div id="login-view" class="login-view">
-    <form id="login-form" class="login-card" autocomplete="off">
+  <div id="gate-view" class="login-view">
+    <form id="gate-form" class="login-card" autocomplete="off">
       <div class="login-logo">&#128220;</div>
       <h1>日志中心</h1>
-      <p>请输入访问码查看日志</p>
-      <input id="login-code" type="password" placeholder="访问码" maxlength="128" required>
-      <p id="login-error" class="login-error hidden"></p>
-      <button type="submit">进入</button>
-      <p class="login-alt"><button id="private-btn-login" type="button" class="linklike">&#128274; 私密区域</button></p>
+      <p>整站都要超级码，输入一次保持 12 小时</p>
+      <input id="gate-code" type="password" placeholder="超级码" maxlength="128" required>
+      <p id="gate-error" class="login-error hidden"></p>
+      <button type="submit">解锁</button>
     </form>
   </div>
 
@@ -25,8 +24,8 @@
       <div class="topbar-actions">
         <span class="updated" id="updated"></span>
         <a href="https://tykrem.top/">服务器监控</a>
-        <button id="private-btn" type="button">&#128274; 私密区域</button>
-        <button id="logout-btn" type="button">退出</button>
+        <button id="private-btn" type="button">&#128274; 私密条目</button>
+        <button id="lock-btn" type="button">锁定</button>
       </div>
     </header>
 
@@ -76,25 +75,20 @@
   <div id="private-view" class="private-view hidden">
     <div class="private-card">
       <div class="private-head">
-        <span>&#128274; 私密区域</span>
+        <span>&#128274; 私密条目</span>
         <button id="private-close" type="button" class="ghost">关闭</button>
       </div>
 
-      <form id="private-lock" class="private-lock">
-        <p>只有超级码能进。这里的内容不会出现在普通日志视图与来源列表里。</p>
-        <input id="private-code" type="password" placeholder="超级码" autocomplete="off" required>
-        <button type="submit">解锁</button>
-        <p id="private-error" class="login-error hidden"></p>
-      </form>
+      <p class="private-hint">这些条目在存储里标成 private，普通日志视图与来源列表里都看不到；整站已经解锁，不需要再输码。</p>
+      <p id="private-error" class="login-error hidden"></p>
 
-      <div id="private-body" class="hidden">
+      <div id="private-body">
         <form id="private-note-form" class="private-note">
           <textarea id="private-note" rows="3" placeholder="记一条私密记录（支持多行），保存后只在这里可见"></textarea>
           <div class="private-note-actions">
             <span id="private-status" class="updated"></span>
             <button type="submit">保存</button>
             <button id="private-refresh" type="button" class="ghost">刷新</button>
-            <button id="private-lock-btn" type="button" class="ghost">锁定</button>
           </div>
         </form>
         <div id="private-list" class="log-list"></div>
@@ -110,6 +104,6 @@
       <p>当前页面暂不支持移动端，请使用电脑浏览器访问。</p>
     </div>
   </div>
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js?v=20260921"></script>
 </body>
 </html>

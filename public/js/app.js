@@ -2,11 +2,11 @@
   "use strict";
 
   var $ = function (id) { return document.getElementById(id); };
-  var loginView = $("login-view");
+  var gateView = $("gate-view");
   var app = $("app");
-  var loginForm = $("login-form");
-  var loginCode = $("login-code");
-  var loginError = $("login-error");
+  var gateForm = $("gate-form");
+  var gateCode = $("gate-code");
+  var gateError = $("gate-error");
   var toastEl = $("toast");
   var state = {
     page: 1,
@@ -29,64 +29,64 @@
   async function api(path, opts) {
     opts = opts || {};
     var res = await fetch(path, opts);
-    if (res.status === 401) {
-      showLogin();
-      throw new Error("登录已过期");
+    // 解锁接口自己的 401 是「码不对」，交给调用方显示，别当成会话过期
+    if (res.status === 401 && path.indexOf("/api/unlock") !== 0) {
+      showGate("解锁状态已过期，请重新输入超级码");
+      throw new Error("需要超级码");
     }
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
     return data;
   }
 
-  // 私密区域用单独一套凭证（超级码 → log_private Cookie），
-  // 所以不能走 api()：它遇到 401 会把人踢回登录页，这里弹错就好
-  async function apiPrivate(path, opts) {
-    var res = await fetch(path, opts);
-    var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
-    return data;
-  }
-
-  function showLogin() {
+  function showGate(msg) {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
     app.classList.add("hidden");
-    loginView.classList.remove("hidden");
-    loginCode.focus();
+    $("private-view").classList.add("hidden");
+    gateView.classList.remove("hidden");
+    gateError.textContent = msg || "";
+    gateError.classList.toggle("hidden", !msg);
+    gateCode.focus();
   }
 
   function showApp() {
-    loginView.classList.add("hidden");
+    gateView.classList.add("hidden");
     app.classList.remove("hidden");
+    if (state.timer) { clearInterval(state.timer); }
+    state.timer = setInterval(function () {
+      if ($("live").checked) loadLogs();
+    }, 5000);
     loadSources();
     loadLogs();
   }
 
-  loginForm.addEventListener("submit", async function (ev) {
+  gateForm.addEventListener("submit", async function (ev) {
     ev.preventDefault();
-    var code = loginCode.value.trim();
+    var code = gateCode.value.trim();
     if (!code) return;
-    loginError.classList.add("hidden");
-    var btn = loginForm.querySelector("button");
+    gateError.classList.add("hidden");
+    var btn = gateForm.querySelector("button");
     btn.disabled = true;
     try {
-      await api("/api/login", {
+      await api("/api/unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code }),
       });
-      loginCode.value = "";
+      gateCode.value = "";
       showApp();
     } catch (err) {
-      loginError.textContent = err.message;
-      loginError.classList.remove("hidden");
+      gateError.textContent = err.message;
+      gateError.classList.remove("hidden");
     } finally {
       btn.disabled = false;
     }
   });
 
-  $("logout-btn").addEventListener("click", async function () {
-    try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  $("lock-btn").addEventListener("click", async function () {
+    try { await api("/api/lock", { method: "POST" }); } catch (e) {}
     state.page = 1;
-    showLogin();
+    showGate("已锁定");
   });
 
   function dayRange() {
@@ -215,12 +215,13 @@
 
   initDates();
 
-  /* ---------- 私密区域 ---------- */
+  /* ---------- 私密条目（数据隔离，不需要二次解锁） ---------- */
   var privateView = $("private-view");
 
   function privateShow() {
     privateView.classList.remove("hidden");
-    privateRefreshState();
+    privateError("");
+    loadPrivateLogs();
   }
 
   function privateHide() {
@@ -233,28 +234,9 @@
     el.classList.toggle("hidden", !msg);
   }
 
-  async function privateRefreshState() {
-    try {
-      var st = await apiPrivate("/api/private/state");
-      if (!st.configured) {
-        privateError("服务端没有配置私密区域访问码（/etc/super-code.env 的 SUPER_CODE）");
-        $("private-lock").classList.add("hidden");
-        $("private-body").classList.add("hidden");
-        return;
-      }
-      privateError("");
-      var unlocked = !!st.unlocked;
-      $("private-lock").classList.toggle("hidden", unlocked);
-      $("private-body").classList.toggle("hidden", !unlocked);
-      if (unlocked) loadPrivateLogs();
-    } catch (e) {
-      privateError(e.message);
-    }
-  }
-
   async function loadPrivateLogs() {
     try {
-      var data = await apiPrivate("/api/private/logs?size=100");
+      var data = await api("/api/private/logs?size=100");
       renderPrivateLogs(data);
     } catch (e) {
       privateError(e.message);
@@ -287,40 +269,15 @@
   }
 
   $("private-btn").addEventListener("click", privateShow);
-  $("private-btn-login").addEventListener("click", privateShow);
   $("private-close").addEventListener("click", privateHide);
   $("private-refresh").addEventListener("click", loadPrivateLogs);
-
-  $("private-lock").addEventListener("submit", async function (ev) {
-    ev.preventDefault();
-    var code = $("private-code").value.trim();
-    if (!code) return;
-    try {
-      await apiPrivate("/api/private/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code }),
-      });
-      $("private-code").value = "";
-      privateError("");
-      privateRefreshState();
-    } catch (e) {
-      privateError(e.message);
-    }
-  });
-
-  $("private-lock-btn").addEventListener("click", async function () {
-    try { await apiPrivate("/api/private/lock", { method: "POST" }); } catch (e) {}
-    $("private-list").innerHTML = "";
-    privateRefreshState();
-  });
 
   $("private-note-form").addEventListener("submit", async function (ev) {
     ev.preventDefault();
     var text = $("private-note").value.trim();
     if (!text) return;
     try {
-      await apiPrivate("/api/private/note", {
+      await api("/api/private/note", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
@@ -332,14 +289,18 @@
     }
   });
 
-  api("/api/me")
-    .then(function () {
-      showApp();
-      state.timer = setInterval(function () {
-        if ($("live").checked) loadLogs();
-      }, 5000);
+  // 先问一次会话：已解锁就直接进，否则停在解锁页
+  api("/api/session")
+    .then(function (st) {
+      if (st && st.unlocked) {
+        showApp();
+        return;
+      }
+      showGate(st && st.configured === false
+        ? "服务端没有配置超级码（/etc/super-code.env 的 SUPER_CODE）"
+        : "");
     })
-    .catch(function () {
-      showLogin();
+    .catch(function (err) {
+      showGate("无法连接服务：" + err.message);
     });
 })();
