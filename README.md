@@ -34,14 +34,14 @@ cat > /etc/log-app.env <<'EOF'
 LOG_PORT=8792
 LOG_HOST=127.0.0.1
 LOG_INGEST_TOKEN=换成你的写入令牌
+LOG_SUPER_CODE=换成日志站独立访问码
 LOG_SESSION_SECRET=换成随机字符串
 LOG_DATA_DIR=/opt/log-app/data
 LOG_RETENTION_DAYS=30
 EOF
 chmod 600 /etc/log-app.env
 
-# 超级码默认读这台机器的 /etc/super-code.env（SUPER_CODE）；
-# 想单独指定就加一行 LOG_SUPER_CODE=...
+# 日志站不再接受其它站点的访问码。
 
 cp -a deploy/log.service /etc/systemd/system/log-center.service
 systemctl daemon-reload
@@ -82,7 +82,7 @@ curl -X POST http://127.0.0.1:8792/api/v1/logs \
 整站只有一把钥匙：**超级码**。`POST /api/unlock` 换取 12 小时有效的签名 Cookie，
 之后查日志、看来源、写私密记录都不用再输码；点「锁定」立刻失效。
 
-- 超级码：`LOG_SUPER_CODE`，不设置时回退读 `/etc/super-code.env` 的 `SUPER_CODE`
+- 网页访问码：`LOG_SUPER_CODE`，在 `/etc/log-app.env` 中必填
   （本机的约定是与文件服务、监控页共用同一个超级码）
 - 换超级码 = 所有已下发的 Cookie 立即失效（签名密钥就是超级码加上会话密钥）
 
@@ -117,7 +117,7 @@ curl -b cookie.txt "http://127.0.0.1:8792/api/v1/sources"
 | `LOG_HOST` | `127.0.0.1` | 监听地址 |
 | `LOG_INGEST_TOKEN` | — | 写入令牌，必填 |
 | `LOG_SESSION_SECRET` | 随机 | 登录 Cookie 签名密钥 |
-| `LOG_SUPER_CODE` | 见下 | 整站超级码；不设置时回退读 `/etc/super-code.env` 的 `SUPER_CODE` |
+| `LOG_SUPER_CODE` | — | 日志站独立访问码，必填 |
 | `LOG_DATA_DIR` | `/opt/log-app/data` | 日志存储目录 |
 | `LOG_RETENTION_DAYS` | `30` | 保留天数 |
 

@@ -15,40 +15,15 @@ const HOST = process.env.LOG_HOST || '127.0.0.1';
 const DATA_DIR = process.env.LOG_DATA_DIR || path.join(__dirname, '..', 'data');
 const RETENTION_DAYS = Math.max(1, parseInt(process.env.LOG_RETENTION_DAYS || '30', 10) || 30);
 const INGEST_TOKEN = String(process.env.LOG_INGEST_TOKEN || '').trim();
-// 整站访问码 = 这台服务器的「超级码」：解锁后才能查任何日志（含私密条目）。
-// 默认从 /etc/super-code.env 读 SUPER_CODE（与监控页、文件服务共用同一个），
-// 也可以用 LOG_SUPER_CODE 单独指定。
-const SUPER_CODE = String(process.env.LOG_SUPER_CODE ||
-  process.env.LOG_PRIVATE_CODE ||
-  superCodeFromEnv('/etc/super-code.env') || '').trim();
+// 日志站只接受自己的访问码，避免其它站点的凭据获得日志权限。
+const SUPER_CODE = String(process.env.LOG_SUPER_CODE || '').trim();
 const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + SUPER_CODE).digest('hex')).trim();
 const COOKIE_NAME = 'log_session';
 const COOKIE_MAX_AGE = 60 * 60 * 12;
 const MAX_BODY = 2 * 1024 * 1024;
 
-/**
- * 从 .env 文件里取某个键的值（只用于读本机超级码，不落任何日志）。
- * @param {string} file
- * @param {string} key
- * @returns {string}
- */
-function envValue(file, key) {
-  try {
-    const lines = fs.readFileSync(file, 'utf8').split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const m = /^([A-Za-z0-9_]+)=(.*)$/.exec(lines[i].trim());
-      if (m && m[1] === key) return m[2].trim();
-    }
-  } catch (e) {}
-  return '';
-}
-
-function superCodeFromEnv(file) {
-  return envValue(file, 'SUPER_CODE');
-}
-
 if (!SUPER_CODE) {
-  console.error('未配置超级码：设置 LOG_SUPER_CODE，或把 SUPER_CODE 写进 /etc/super-code.env');
+  console.error('未配置日志站访问码：在 /etc/log-app.env 设置 LOG_SUPER_CODE');
   process.exit(1);
 }
 
@@ -228,7 +203,7 @@ function route(req, res) {
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Set-Cookie': COOKIE_NAME + '=' + encodeURIComponent(token) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
+        'Set-Cookie': COOKIE_NAME + '=' + encodeURIComponent(token) + '; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
       });
       res.end(JSON.stringify({ ok: true }));
     }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
@@ -238,7 +213,7 @@ function route(req, res) {
   if (req.method === 'POST' && p === '/api/lock') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Set-Cookie': COOKIE_NAME + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
+      'Set-Cookie': COOKIE_NAME + '=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0',
     });
     res.end(JSON.stringify({ ok: true }));
     return;
