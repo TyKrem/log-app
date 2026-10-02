@@ -29,7 +29,7 @@
     opts = opts || {};
     var res = await fetch(path, opts);
     if (res.status === 401) {
-      showGate("登录状态已过期，请重新登录");
+      showGate("请登录管理会话后继续使用");
       throw new Error("需要登录");
     }
     var data = await res.json().catch(function () { return {}; });
@@ -60,7 +60,7 @@
   $("lock-btn").addEventListener("click", async function () {
     try { await api("/api/lock", { method: "POST" }); } catch (e) {}
     state.page = 1;
-    showGate("已锁定");
+    showGate("已退出所有站点");
   });
 
   function dayRange() {
@@ -270,7 +270,8 @@
         showApp();
         return;
       }
-      showGate(st && st.configured === false ? "服务端尚未配置统一登录" : "");
+      showGate(st && st.configured === false ? "服务端尚未配置统一登录" :
+        st && st.role === "read" ? "当前是只读会话，请在统一登录页切换为管理身份" : "");
     })
     .catch(function (err) {
       showGate("无法连接服务：" + err.message);

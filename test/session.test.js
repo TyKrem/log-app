@@ -10,7 +10,7 @@ test('统一会话只接受有效签名、角色和期限', () => {
   for (const role of ['admin', 'read']) {
     const token = session.issue(role, secret, now);
     assert.equal(session.verify(token, secret, now), role);
-    assert.equal(session.verify(token, secret, now + 12 * 60 * 60 * 1000), '');
+    assert.equal(session.verify(token, secret, now + session.MAX_AGE_SECONDS * 1000), '');
     assert.equal(session.verify(token, 'different-secret', now), '');
     assert.equal(session.verify(token + 'bad', secret, now), '');
     assert.equal(session.cookieValue('x=1; tykrem_session=' + token), token);

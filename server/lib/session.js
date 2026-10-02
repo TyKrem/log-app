@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 
 const COOKIE_NAME = 'tykrem_session';
-const MAX_AGE_SECONDS = 12 * 60 * 60;
+const MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 function sign(payload, secret) {
   return crypto.createHmac('sha256', secret).update(payload).digest('base64url');

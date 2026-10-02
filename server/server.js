@@ -189,7 +189,8 @@ function route(req, res) {
   }
 
   if (req.method === 'GET' && p === '/api/session') {
-    return sendJson(res, 200, { configured: !!SHARED_SECRET, unlocked: isUnlocked(req) });
+    const role = SHARED_SESSION.verify(SHARED_SESSION.cookieValue(req.headers.cookie), SHARED_SECRET);
+    return sendJson(res, 200, { configured: !!SHARED_SECRET, unlocked: role === 'admin', role });
   }
 
   // ---- 私密条目：数据上仍然隔离（普通视图看不到），但不再需要二次解锁 ----
