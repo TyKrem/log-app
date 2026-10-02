@@ -7,7 +7,7 @@ const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
 const UTIL = require('./lib/util.js');
-const SESSION = require('./lib/session.js');
+const SHARED_SESSION = require('./lib/session.js');
 const ENTRY = require('./lib/entry.js');
 
 const PORT = parseInt(process.env.LOG_PORT || '8792', 10);
@@ -15,15 +15,11 @@ const HOST = process.env.LOG_HOST || '127.0.0.1';
 const DATA_DIR = process.env.LOG_DATA_DIR || path.join(__dirname, '..', 'data');
 const RETENTION_DAYS = Math.max(1, parseInt(process.env.LOG_RETENTION_DAYS || '30', 10) || 30);
 const INGEST_TOKEN = String(process.env.LOG_INGEST_TOKEN || '').trim();
-// 日志站只接受自己的访问码，避免其它站点的凭据获得日志权限。
-const SUPER_CODE = String(process.env.LOG_SUPER_CODE || '').trim();
-const SESSION_SECRET = String(process.env.LOG_SESSION_SECRET || crypto.createHash('sha256').update('log:' + SUPER_CODE).digest('hex')).trim();
-const COOKIE_NAME = 'log_session';
-const COOKIE_MAX_AGE = 60 * 60 * 12;
+const SHARED_SECRET = String(process.env.AUTH_SESSION_SECRET || '').trim();
 const MAX_BODY = 2 * 1024 * 1024;
 
-if (!SUPER_CODE) {
-  console.error('未配置日志站访问码：在 /etc/log-app.env 设置 LOG_SUPER_CODE');
+if (!SHARED_SECRET) {
+  console.error('未配置统一会话签名密钥：检查 /etc/auth-session.env');
   process.exit(1);
 }
 
@@ -159,27 +155,9 @@ function readBody(req) {
   });
 }
 
-// 令牌与 Cookie 解析在 lib/session.js，这里把运行期配置传进去
-function parseCookies(req) {
-  return SESSION.parseCookies(req.headers.cookie || '');
-}
-
-function makeToken(role) {
-  return SESSION.makeToken(role, SESSION_SECRET);
-}
-
-function verifyToken(token) {
-  // 配置里 COOKIE_MAX_AGE 是秒，库里按毫秒收
-  return SESSION.verifyToken(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
-}
-
-function tokenRole(token) {
-  return SESSION.tokenRole(token, SESSION_SECRET, COOKIE_MAX_AGE * 1000);
-}
-
-// 整站唯一凭证：超级码换来的会话 Cookie
+// 管理会话由统一登录服务签发，日志写入仍使用独立的服务令牌。
 function isUnlocked(req) {
-  return tokenRole(parseCookies(req)[COOKIE_NAME]) === 'super';
+  return SHARED_SESSION.verify(SHARED_SESSION.cookieValue(req.headers.cookie), SHARED_SECRET) === 'admin';
 }
 
 function isIngestAllowed(req) {
@@ -191,36 +169,27 @@ function isIngestAllowed(req) {
 function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  if (req.method === 'POST' && p !== '/api/v1/logs' && req.headers.origin &&
+      req.headers.origin !== 'https://log.tykrem.top') {
+    return sendJson(res, 403, { error: '请求来源无效' });
+  }
 
-  // ---- 整站唯一的解锁入口：超级码换 12 小时会话 ----
+  // 旧登录入口不再签发站点专用会话，避免绕过统一登录。
   if (req.method === 'POST' && p === '/api/unlock') {
-    readBody(req).then(function (body) {
-      if (!SUPER_CODE) return sendJson(res, 503, { error: '服务端没有配置超级码' });
-      if (!safeEqual(String(body.code || ''), SUPER_CODE)) {
-        return sendJson(res, 401, { error: '超级码错误' });
-      }
-      const token = makeToken('super');
-      res.writeHead(200, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'Set-Cookie': COOKIE_NAME + '=' + encodeURIComponent(token) + '; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=' + COOKIE_MAX_AGE,
-      });
-      res.end(JSON.stringify({ ok: true }));
-    }).catch(function (e) { sendJson(res, e.status || 400, { error: e.message }); });
-    return;
+    return sendJson(res, 410, { error: '请使用统一登录入口' });
   }
 
   if (req.method === 'POST' && p === '/api/lock') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Set-Cookie': COOKIE_NAME + '=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0',
+      'Set-Cookie': SHARED_SESSION.COOKIE_NAME + '=; Domain=tykrem.top; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0',
     });
     res.end(JSON.stringify({ ok: true }));
     return;
   }
 
   if (req.method === 'GET' && p === '/api/session') {
-    return sendJson(res, 200, { configured: !!SUPER_CODE, unlocked: isUnlocked(req) });
+    return sendJson(res, 200, { configured: !!SHARED_SECRET, unlocked: isUnlocked(req) });
   }
 
   // ---- 私密条目：数据上仍然隔离（普通视图看不到），但不再需要二次解锁 ----

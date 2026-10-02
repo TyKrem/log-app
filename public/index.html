@@ -8,14 +8,13 @@
 </head>
 <body>
   <div id="gate-view" class="login-view">
-    <form id="gate-form" class="login-card" autocomplete="off">
+    <div class="login-card">
       <div class="login-logo">&#128220;</div>
       <h1>日志中心</h1>
-      <p>整站都要超级码，输入一次保持 12 小时</p>
-      <input id="gate-code" type="password" placeholder="超级码" maxlength="128" required>
+      <p>请先通过统一登录入口登录管理会话，有效期 12 小时。</p>
       <p id="gate-error" class="login-error hidden"></p>
-      <button type="submit">解锁</button>
-    </form>
+      <a id="login-link" href="https://tykrem.top/auth/">前往统一登录</a>
+    </div>
   </div>
 
   <div id="app" class="app hidden">

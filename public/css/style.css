@@ -95,6 +95,10 @@ button { font: inherit; color: inherit; }
   width: 100%; height: 42px; margin-top: 14px; border: 0; border-radius: 10px;
   background: var(--accent); color: #fff; font-weight: 700; cursor: pointer;
 }
+.login-card #login-link {
+  display: block; padding: 12px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-weight: 700; text-decoration: none;
+}
 .login-error { color: var(--red); font-size: 12px; min-height: 18px; margin-top: 8px; }
 
 .topbar {

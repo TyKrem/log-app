@@ -4,9 +4,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var gateView = $("gate-view");
   var app = $("app");
-  var gateForm = $("gate-form");
-  var gateCode = $("gate-code");
   var gateError = $("gate-error");
+  $("login-link").href = "https://tykrem.top/auth/?next=" + encodeURIComponent(location.origin + "/");
   var toastEl = $("toast");
   var state = {
     page: 1,
@@ -29,10 +28,9 @@
   async function api(path, opts) {
     opts = opts || {};
     var res = await fetch(path, opts);
-    // 解锁接口自己的 401 是「码不对」，交给调用方显示，别当成会话过期
-    if (res.status === 401 && path.indexOf("/api/unlock") !== 0) {
-      showGate("解锁状态已过期，请重新输入超级码");
-      throw new Error("需要超级码");
+    if (res.status === 401) {
+      showGate("登录状态已过期，请重新登录");
+      throw new Error("需要登录");
     }
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
@@ -46,7 +44,6 @@
     gateView.classList.remove("hidden");
     gateError.textContent = msg || "";
     gateError.classList.toggle("hidden", !msg);
-    gateCode.focus();
   }
 
   function showApp() {
@@ -59,29 +56,6 @@
     loadSources();
     loadLogs();
   }
-
-  gateForm.addEventListener("submit", async function (ev) {
-    ev.preventDefault();
-    var code = gateCode.value.trim();
-    if (!code) return;
-    gateError.classList.add("hidden");
-    var btn = gateForm.querySelector("button");
-    btn.disabled = true;
-    try {
-      await api("/api/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code }),
-      });
-      gateCode.value = "";
-      showApp();
-    } catch (err) {
-      gateError.textContent = err.message;
-      gateError.classList.remove("hidden");
-    } finally {
-      btn.disabled = false;
-    }
-  });
 
   $("lock-btn").addEventListener("click", async function () {
     try { await api("/api/lock", { method: "POST" }); } catch (e) {}
@@ -296,9 +270,7 @@
         showApp();
         return;
       }
-      showGate(st && st.configured === false
-        ? "服务端没有配置超级码（/etc/super-code.env 的 SUPER_CODE）"
-        : "");
+      showGate(st && st.configured === false ? "服务端尚未配置统一登录" : "");
     })
     .catch(function (err) {
       showGate("无法连接服务：" + err.message);
