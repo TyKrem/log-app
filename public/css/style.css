@@ -8,15 +8,14 @@
   --button-text: #ffffff; --overlay: rgba(20,35,61,.48);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #0c1729; --elev: #14233b; --soft: #1c2f4c;
     --line: #49627f; --line-soft: #293e5b; --text: #f0f6ff; --muted: #b9cce4;
     --accent: #80b8ff; --blue: #80b8ff; --green: #65d9a2; --red: #ff8590; --orange: #ffd16b;
     --button-text: #0c2344; --overlay: rgba(4,12,24,.7);
   }
-}
+
 * { box-sizing: border-box; }
 body { margin: 0; font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
 button, input, select, textarea { font: inherit; color: inherit; }
