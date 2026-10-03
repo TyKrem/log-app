@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>日志中心 · log.tykrem.top</title>
-  <link rel="stylesheet" href="/css/style.css?v=20260921">
+  <link rel="stylesheet" href="/css/style.css?v=20261003-blue">
 </head>
 <body>
   <div id="gate-view" class="login-view">
     <div class="login-card">
-      <div class="login-logo">&#128220;</div>
+      <div class="login-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></div>
       <h1>日志中心</h1>
       <p>请先登录管理会话，登录后自动返回日志中心，有效期 7 天。</p>
       <p id="gate-error" class="login-error hidden"></p>
@@ -19,16 +19,17 @@
 
   <div id="app" class="app hidden">
     <header class="topbar">
-      <div class="brand">&#128220; 日志中心</div>
+      <div class="brand"><span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span>日志中心</div>
       <div class="topbar-actions">
         <span class="updated" id="updated"></span>
         <a href="https://tykrem.top/">服务器监控</a>
-        <button id="private-btn" type="button">&#128274; 私密条目</button>
+        <button id="private-btn" type="button">私密条目</button>
         <button id="lock-btn" type="button">退出</button>
       </div>
     </header>
 
     <main class="container">
+      <div class="page-head"><p class="eyebrow">运行记录</p><h1>日志中心</h1><p>筛选来源与时间，快速找到需要关注的记录。</p></div>
       <section class="filter-bar">
         <label>来源
           <select id="source"><option value="">全部</option></select>
@@ -71,14 +72,14 @@
     </main>
   </div>
 
-  <div id="private-view" class="private-view hidden">
+  <div id="private-view" class="private-view hidden" role="dialog" aria-modal="true" aria-labelledby="private-title">
     <div class="private-card">
       <div class="private-head">
-        <span>&#128274; 私密条目</span>
+        <span id="private-title">私密条目</span>
         <button id="private-close" type="button" class="ghost">关闭</button>
       </div>
 
-      <p class="private-hint">这些条目在存储里标成 private，普通日志视图与来源列表里都看不到；整站已经解锁，不需要再输码。</p>
+      <p class="private-hint">个人记录仅在此处显示，不会混入普通运行日志。</p>
       <p id="private-error" class="login-error hidden"></p>
 
       <div id="private-body">
@@ -96,13 +97,6 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
-  <div class="mobile-block">
-    <div class="mobile-card">
-      <p class="mobile-emoji">📱</p>
-      <h2>不支持移动端</h2>
-      <p>当前页面暂不支持移动端，请使用电脑浏览器访问。</p>
-    </div>
-  </div>
-  <script src="/js/app.js?v=20260921"></script>
+  <script src="/js/app.js?v=20261003-blue"></script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+'use strict';
+
 (function () {
   "use strict";
 
@@ -10,6 +12,7 @@
   var state = {
     page: 1,
     timer: null,
+    requestId: 0,
   };
 
   function toast(msg) {
@@ -39,6 +42,8 @@
 
   function showGate(msg) {
     if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    state.requestId++;
+    privateHide();
     app.classList.add("hidden");
     $("private-view").classList.add("hidden");
     gateView.classList.remove("hidden");
@@ -113,9 +118,10 @@
   }
 
   async function loadLogs() {
+    var requestId = ++state.requestId;
     try {
       var data = await api("/api/v1/logs?" + params().toString());
-      render(data);
+      if (requestId === state.requestId) render(data);
     } catch (e) {
       toast(e.message);
     }
@@ -148,7 +154,7 @@
     data.logs.forEach(function (row) {
       var el = document.createElement("div");
       el.className = "log-row";
-      var metaHtml = row.meta ? '<div class="log-meta">meta<pre>' + esc(JSON.stringify(row.meta, null, 2)) + "</pre></div>" : "";
+      var metaHtml = row.meta ? '<details class="log-meta"><summary>详细信息</summary><pre>' + esc(JSON.stringify(row.meta, null, 2)) + "</pre></details>" : "";
       el.innerHTML =
         '<span class="log-time">' + esc(fmtTime(row.ts)) + "</span>" +
         '<span class="log-source">' + esc(row.source) + "</span>" +
@@ -166,6 +172,8 @@
     $("source").value = "";
     $("level").value = "";
     $("q").value = "";
+    $("from").value = "";
+    $("to").value = "";
     initDates();
     state.page = 1;
     loadLogs();
@@ -194,12 +202,16 @@
 
   function privateShow() {
     privateView.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    $("private-note").focus();
     privateError("");
     loadPrivateLogs();
   }
 
   function privateHide() {
     privateView.classList.add("hidden");
+    document.body.style.overflow = "";
+    $("private-btn").focus();
   }
 
   function privateError(msg) {
@@ -232,7 +244,7 @@
     data.logs.forEach(function (row) {
       var el = document.createElement("div");
       el.className = "log-row";
-      var metaHtml = row.meta ? '<div class="log-meta">meta<pre>' + esc(JSON.stringify(row.meta, null, 2)) + "</pre></div>" : "";
+      var metaHtml = row.meta ? '<details class="log-meta"><summary>详细信息</summary><pre>' + esc(JSON.stringify(row.meta, null, 2)) + "</pre></details>" : "";
       el.innerHTML =
         '<span class="log-time">' + esc(fmtTime(row.ts)) + "</span>" +
         '<span class="log-source">' + esc(row.source) + "</span>" +
@@ -244,12 +256,26 @@
 
   $("private-btn").addEventListener("click", privateShow);
   $("private-close").addEventListener("click", privateHide);
+  privateView.addEventListener("click", function (event) { if (event.target === privateView) privateHide(); });
+  document.addEventListener("keydown", function (event) {
+    if (privateView.classList.contains("hidden")) return;
+    if (event.key === "Escape") privateHide();
+    if (event.key === "Tab") {
+      var controls = privateView.querySelectorAll('button:not(:disabled), textarea, a[href], summary');
+      var first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
   $("private-refresh").addEventListener("click", loadPrivateLogs);
 
   $("private-note-form").addEventListener("submit", async function (ev) {
     ev.preventDefault();
     var text = $("private-note").value.trim();
     if (!text) return;
+    var submit = ev.currentTarget.querySelector("button[type=submit]");
+    if (submit.disabled) return;
+    submit.disabled = true;
     try {
       await api("/api/private/note", {
         method: "POST",
@@ -260,6 +286,8 @@
       loadPrivateLogs();
     } catch (e) {
       privateError(e.message);
+    } finally {
+      submit.disabled = false;
     }
   });
 
