@@ -4,8 +4,8 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=log-center
+Group=log-center
 EnvironmentFile=/etc/log-app.env
 EnvironmentFile=/etc/auth-session.env
 ExecStart=/opt/node/bin/node /opt/log-app/server/server.js
@@ -13,6 +13,16 @@ Restart=always
 RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
+UMask=0077
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/log-app/data
+CapabilityBoundingSet=
+RestrictSUIDSGID=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
